@@ -1265,6 +1265,8 @@ public class PdfDocument implements IEventDispatcher, Closeable {
 
         int pageInsertIndex = insertBeforePage;
         boolean insertInBetween = insertBeforePage < toDocument.getNumberOfPages() + 1;
+        // Flag if either document has PageLabels
+        final boolean pageLabelsPresent = null != getPageLabels() || null != toDocument.getPageLabels();
 
         for (Integer pageNum : pagesToCopy) {
             PdfPage page = getPage((int) pageNum);
@@ -1279,10 +1281,17 @@ public class PdfDocument implements IEventDispatcher, Closeable {
             int lastRangeInd = rangesOfPagesWithIncreasingNumbers.size() - 1;
             rangesOfPagesWithIncreasingNumbers.get(lastRangeInd).put(page, newPage);
 
+            // Get a reference to the toPage for Label manipulation 
+            PdfPage toPage = null;
             if (insertInBetween) {
-                toDocument.addPage(pageInsertIndex, newPage);
+              toPage = toDocument.addPage(pageInsertIndex, newPage);
             } else {
-                toDocument.addPage(newPage);
+              toPage = toDocument.addPage(newPage);
+            }
+            
+            // If Labels are present, move the label to the merged/copied page
+            if (pageLabelsPresent) {
+              checkAndAddLabels(pageNum-1, toPage);
             }
             pageInsertIndex++;
             if (toDocument.hasOutlines()) {
@@ -1328,7 +1337,33 @@ public class PdfDocument implements IEventDispatcher, Closeable {
         }
         return copiedPages;
     }
-
+    
+    /**
+     * The object of this methoid is to copy any custom page labels from one document to another
+     * while in the 'copyPagesTo' method. Checks for null page-label lists in the fromDocument and toDocument and initializes them. 
+     * Then checks the page label to make sure it is present and not just a string representation of the 
+     * page number. For any pages that do not have a pageLabel, a new label is created with a string representation of the page number.
+     */
+    protected void checkAndAddLabels(Integer fromPageNum, PdfPage toPage) {
+      // initialize page labels for fromDocument if not present
+      if (null == getPageLabels()) {
+        getFirstPage().setPageLabel(PageLabelNumberingStyle.DECIMAL_ARABIC_NUMERALS, null);
+      }
+      // initialize page labels for toDocument if not present
+      if (null == toPage.getDocument().getPageLabels()) {
+        toPage.getDocument().getFirstPage().setPageLabel(PageLabelNumberingStyle.DECIMAL_ARABIC_NUMERALS, null);
+      }
+      final Integer toPagenum = toPage.getDocument().getPageNumber(toPage);
+      // Use the fromDocument page label: if the pageLabel is present, and not a string representation of the page number
+      if (null != getPageLabels() && null != getPageLabels()[fromPageNum] &&
+          (!getPageLabels()[fromPageNum].matches("\\d*") || Integer.valueOf(getPageLabels()[fromPageNum]) != fromPageNum+1)) {
+        toPage.setPageLabel(null, getPageLabels()[fromPageNum], toPagenum);
+      } else {
+        // Otherwise, Use a string representation of the toDocument pageNumber
+        toPage.setPageLabel(PageLabelNumberingStyle.DECIMAL_ARABIC_NUMERALS, null, toPagenum);
+      }
+    }
+    
     /**
      * Copies a range of pages from current document to {@code toDocument} appending copied pages to the end.
      * Use this method if you want to copy pages across tagged documents.
