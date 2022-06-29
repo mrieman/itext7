@@ -1279,10 +1279,11 @@ public class PdfDocument implements IEventDispatcher, Closeable {
             int lastRangeInd = rangesOfPagesWithIncreasingNumbers.size() - 1;
             rangesOfPagesWithIncreasingNumbers.get(lastRangeInd).put(page, newPage);
 
+            PdfPage toPage = null;
             if (insertInBetween) {
-                toDocument.addPage(pageInsertIndex, newPage);
+                toPage = toDocument.addPage(pageInsertIndex, newPage);
             } else {
-                toDocument.addPage(newPage);
+                toPage = toDocument.addPage(newPage);
             }
             pageInsertIndex++;
             if (toDocument.hasOutlines()) {
@@ -1291,6 +1292,7 @@ public class PdfDocument implements IEventDispatcher, Closeable {
                     outlinesToCopy.addAll(pageOutlines);
             }
             lastCopiedPageNum = (int) pageNum;
+            copier.afterPageAttachedToDocument(page, toPage);
         }
 
         copyLinkAnnotations(toDocument, page2page);
