@@ -59,4 +59,12 @@ public interface IPdfPageExtraCopier {
      * @param toPage the target page in a target document
      */
     void copy(PdfPage fromPage, PdfPage toPage);
+    
+    /**
+     * Extendible utility method that is called after the toPage is linked to the copied pdfDocument.
+     *
+     * @param page
+     * @param toPage
+     */
+    default void afterPageAttachedToDocument(PdfPage page, PdfPage toPage) {}
 }
