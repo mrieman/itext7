@@ -1294,6 +1294,7 @@ public class PdfDocument implements IEventDispatcher, Closeable {
         }
 
         copyLinkAnnotations(toDocument, page2page);
+        copyPageLabels(toDocument, page2page);
 
         // Copying OCGs should go after copying LinkAnnotations
         if (getCatalog() != null && getCatalog().getPdfObject().getAsDictionary(PdfName.OCProperties) != null) {
@@ -1328,6 +1329,69 @@ public class PdfDocument implements IEventDispatcher, Closeable {
         }
         return copiedPages;
     }
+    
+  /**
+   * Copies custom page label tree from the fromPdf to the toDocument.
+   * 
+   * If neither PDF has custom labels, the logic is skipped
+   * If the incoming (fromPdf) has custom labels, they are added to the PageLabelTree
+   * If the incoming (fromPdf) does not have custom Labels and the receiving (toPdf) does contain custom Labels, 
+   * the incoming pdf pages are labeled with a String representation of the final page number 
+   * 
+   * @param toDocument
+   * @param page2page
+   */
+  private void copyPageLabels(PdfDocument toDocument, Map<PdfPage, PdfPage> page2page) {
+    if (hasCustomLabels(getCatalog())) {
+      page2page.entrySet().forEach(entry -> {
+        final PdfObject fromPageLabel = getCatalog().getPageLabelsTree(false).getNumbers().get(getPageNumber(entry.getKey()) - 1);
+        final PdfDictionary toPpageLabel = new PdfDictionary();
+        if (null != fromPageLabel) {
+          toPpageLabel.copyContent(fromPageLabel, toDocument);
+          if (toPpageLabel.isEmpty() || isPageNumber((PdfDictionary) fromPageLabel, getPageNumber(entry.getKey()))) {
+            toPpageLabel.clear();
+            toPpageLabel.put(PdfName.P, new PdfString(String.valueOf(toDocument.getPageNumber(entry.getValue()))));
+          }
+          toDocument.getCatalog().getPageLabelsTree(true).addEntry(toDocument.getPageNumber(entry.getValue()) - 1, toPpageLabel);
+        }
+      });
+    }
+    else if (hasCustomLabels(toDocument.getCatalog())) {
+      page2page.entrySet().forEach(entry -> {
+        final PdfDictionary toPpageLabel = new PdfDictionary();
+        toPpageLabel.put(PdfName.P, new PdfString(String.valueOf(toDocument.getPageNumber(entry.getValue()))));
+        toDocument.getCatalog().getPageLabelsTree(true).addEntry(toDocument.getPageNumber(entry.getValue()) - 1, toPpageLabel);
+
+      });
+    }
+  }
+
+  /**
+   * A check to see if the pdfCatalog contains custom labels
+   * 
+   * Performed by checking tree size; and checks for default numbering convention if contains only one value
+   * 
+   * @param pdfCatalog
+   * @return
+   */
+  private boolean hasCustomLabels(PdfCatalog pdfCatalog) {
+    return pdfCatalog.getPageLabelsTree(false) != null && !pdfCatalog.getPageLabelsTree(false).getNumbers().isEmpty()
+        && (pdfCatalog.getPageLabelsTree(false).getNumbers().size() != 1 || ((PdfDictionary) pdfCatalog.getPageLabelsTree(false).getNumbers().get(0)).size() != 1
+            || ((PdfDictionary) pdfCatalog.getPageLabelsTree(false).getNumbers().get(0)).get(PdfName.S) == null
+            || !((PdfDictionary) pdfCatalog.getPageLabelsTree(false).getNumbers().get(0)).get(PdfName.S).equals(PdfName.D));
+  }
+
+  /**
+   * Checks if the custom pageLabel is actually just a String Representation of the page number
+   * 
+   * @param pageLabel
+   * @param pageNumber
+   * @return
+   */
+  private boolean isPageNumber(PdfDictionary pageLabel, int pageNumber) {
+    return pageLabel.size() == 1 && pageLabel.containsKey(PdfName.P)
+        && ((PdfString) pageLabel.get(PdfName.P)).getValue().equalsIgnoreCase(String.valueOf(pageNumber));
+  }
 
     /**
      * Copies a range of pages from current document to {@code toDocument} appending copied pages to the end.
